@@ -1,0 +1,134 @@
+---
+title: 'Forecasting covid-19 hospital admission in UK'
+author:
+  - "Studend Number:21114834   Module Number: BST832"
+  - "Lecturer Name: Dr Bahman Rostami-Tabar "
+date: "07 May 2022"
+output:
+  pdf_document: 
+    latex_engine: xelatex
+    toc: yes
+bibliography: mybib.bib
+csl: harvard-cardiff-university.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,eval = TRUE, warning = FALSE, message = FALSE, 
+                      out.width = "70%", fig.align = 'center', fig.pos = 'H')
+library(fpp3)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(ggthemes)
+library(kableExtra)
+library(gridExtra)
+library(janitor)
+library(GGally)
+```
+
+
+
+```{r data-introduce, include=FALSE}
+covid19_uk <- read_csv(file = "data/covid19_uk.csv")
+#col_types = cols(ID = col_date(format = "%d/%m/%Y")))                       
+
+covid19_uk$date <- as_date(covid19_uk$date,format="%d/%m/%Y")
+```
+
+describe dataset.
+
+  
+
+#   Part A- key feature     
+
+## Dataset Covid19 UK:
+
+## Check data quality:
+
+```{r quality-check, include=FALSE}
+covid19_uk %>% anyNA()
+covid19_uk %>% duplicated() %>% sum()
+covid19_tsb<-as_tsibble(covid19_uk, index= date)
+
+```
+
+describe data
+
+## Prelimary analysis:
+
+### Hospital timeseries visualisation
+
+```{r data-vis, options}
+covid19_tsb %>% ggplot(mapping=aes(x= date, y=hospital_admission))+ geom_point()+geom_line()+ ggthemes::theme_clean()
+
+```
+
+A time-series plot is a commonly used graphical tool useful for examining the underlying long-term pattern of a time series. Time (days, months, years, etc.) is plotted on the horizontal axis, and the series of interest is plotted on the vertical axis. Here in this time series visualization 
+For the time series, I utilized date and hospital admission.
+
+```{r SeasonalPlot, fig.cap="weekly cases"}
+hospital_adm<-covid19_tsb %>% select(hospital_admission)
+hospital_adm %>% gg_season(period = "week") + geom_point() +ggthemes::theme_clean()
+```
+
+```{r Autocorrelation}
+hospital_adm %>% ACF(lag_max = 28) %>% autoplot()+ggthemes::theme_clean()
+```
+
+
+Autocorrelation is significant because it can assist us in identifying trends in our data, selecting the optimal prediction model, and appropriately evaluating the model's efficacy.
+
+
+```{r PartialACF}
+hospital_adm %>% PACF(lag_max = 28) %>% autoplot()+ggthemes::theme_clean()
+```
+
+### Relationship within predictors.
+
+```{r predictors}
+numeric_predictors<-covid19_tsb %>% as_tibble() %>%  select(alltest_performed,hospital_cases,all_positive_case,NHS111_call,stringency_index,apple_driving,apple_transit,apple_walking)
+
+numeric_predictors %>% ggpairs()
+```
+
+### Relationship between admission and predictors.
+
+```{r label, options}
+admision_predictors <- covid19_tsb %>% as_tibble() %>% select(-date)
+
+covid19_long <-  admision_predictors %>%
+  pivot_longer(cols = 2:14, names_to = "predictor", values_to = "value")
+
+ggplot(data = covid19_long, mapping = aes(x = value, y = hospital_admission)) + 
+  geom_point() +
+  facet_wrap(vars(predictor), ncol = 4, scales = "free")
+# you can also explore c+cf: https://online.stat.psu.edu/stat510/lesson/8/8.2
+```
+
+# Forecasting
+
+```{r point-accuracy, options}
+fc_accuracy <- read_rds("result/fc_accuracy.rds")
+fc_accuracy %>% select(.model, RMSE, MAE)
+```
+
+## Accuracy for each id
+
+```{r accuracy-id, options}
+fc_accuracy_id <- read_rds("result/fc_accuracy_id.rds")
+
+fc_accuracy_id_data <- fc_accuracy_id %>% select(.id,.model,RMSE) 
+
+ggplot(data=fc_accuracy_id_data, aes(RMSE))+
+  geom_density(aes(fill=factor(.model)), alpha=.5)
+```
+
+## Accuracy for each horizon
+
+```{r accuracy-h, options}
+fc_accuracy_h <- read_rds("result/fc_accuracy_h.rds")
+
+```
+
+
+# Refrence
